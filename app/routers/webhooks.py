@@ -1,111 +1,189 @@
-from fastapi import APIRouter, Header, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Header
 from typing import Optional
+import json
 import logging
-from ..auth import get_installation_token, verify_github_signature
-from ..queues import enqueue_diff
-from ..config import get_github_webhook_secret, get_github_app_id, get_github_private_key
+from ..auth import verify_webhook_signature
+from ..queues import enqueue_job
+from ..crud import repository_crud, pull_request_crud, github_profile_crud
+from ..models import PullRequestStatus
 
 router = APIRouter(prefix="/github", tags=["webhooks"])
 logger = logging.getLogger(__name__)
 
 
 @router.post("/webhook")
-async def handle_github_webhook(
+async def github_webhook(
     request: Request,
-    x_hub_signature_256: str = Header(..., alias="X-Hub-Signature-256"),
-    x_github_event: str = Header(..., alias="X-GitHub-Event")
+    x_hub_signature_256: Optional[str] = Header(None, alias="X-Hub-Signature-256")
 ):
     """
-    Handle GitHub webhook events for pull requests
+    Handle GitHub webhook events (pull_request, push, etc.)
     """
     try:
-        # Get the raw body for signature verification
+        # Get raw body for signature verification
         body = await request.body()
         
-        # Verify the webhook signature
-        webhook_secret = get_github_webhook_secret()
-        if not verify_github_signature(body, x_hub_signature_256, webhook_secret):
+        # Verify webhook signature
+        if not verify_webhook_signature(body, x_hub_signature_256):
             raise HTTPException(status_code=401, detail="Invalid signature")
         
-        # Parse the JSON payload
-        payload = await request.json()
+        # Parse JSON payload
+        try:
+            payload = json.loads(body.decode('utf-8'))
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
         
-        logger.info(f"Received GitHub webhook event: {x_github_event}")
+        event_type = request.headers.get("X-GitHub-Event")
         
-        # Handle pull request events
-        if x_github_event == "pull_request" and payload.get("action") in {"opened", "synchronize"}:
+        if event_type == "pull_request":
             await handle_pull_request_event(payload)
-        
-        # Handle other events as needed
-        elif x_github_event == "push":
+        elif event_type == "push":
             await handle_push_event(payload)
-        
         else:
-            logger.info(f"Ignoring event: {x_github_event} with action: {payload.get('action', 'N/A')}")
+            logger.info(f"Received unhandled event type: {event_type}")
         
-        return {"ok": True, "event": x_github_event}
+        return {"status": "success", "event": event_type}
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error handling webhook: {e}")
+        logger.error(f"Error processing webhook: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def handle_pull_request_event(payload: dict):
-    """
-    Handle pull request opened/synchronized events
-    """
+    """Handle pull_request webhook events"""
     try:
-        installation_id = payload["installation"]["id"]
-        repo_full_name = payload["repository"]["full_name"]
-        pr_number = payload["number"]
+        action = payload.get("action")
+        pr_data = payload.get("pull_request", {})
+        repo_data = payload.get("repository", {})
         
-        logger.info(f"Processing PR event for {repo_full_name} PR #{pr_number}")
+        if action not in ["opened", "synchronize", "closed"]:
+            logger.info(f"Ignoring PR action: {action}")
+            return
         
-        # Get installation token for GitHub API access
-        app_id = get_github_app_id()
-        private_key = get_github_private_key()
-        token = get_installation_token(app_id, str(installation_id), private_key)
+        # Create or update GitHub profile for PR author
+        author_data = pr_data.get("user", {})
+        profile_data = {
+            "github_id": author_data.get("id"),
+            "username": author_data.get("login"),
+            "avatar_url": author_data.get("avatar_url"),
+            "name": author_data.get("name"),
+            "email": author_data.get("email")
+        }
         
-        # Enqueue background job to process the diff
-        await enqueue_diff(repo_full_name, pr_number, token)
+        author_profile = await github_profile_crud.create_or_update(profile_data)
         
-        logger.info(f"Enqueued diff processing for {repo_full_name} PR #{pr_number}")
+        # Create or update repository owner profile
+        owner_data = repo_data.get("owner", {})
+        owner_profile_data = {
+            "github_id": owner_data.get("id"),
+            "username": owner_data.get("login"),
+            "avatar_url": owner_data.get("avatar_url"),
+            "name": owner_data.get("name")
+        }
         
-    except KeyError as e:
-        logger.error(f"Missing required field in payload: {e}")
-        raise HTTPException(status_code=400, detail=f"Missing required field: {e}")
+        owner_profile = await github_profile_crud.create_or_update(owner_profile_data)
+        
+        # Create or update repository
+        repository = await repository_crud.get_by_github_id(repo_data.get("id"))
+        if not repository:
+            repo_create_data = {
+                "github_id": repo_data.get("id"),
+                "name": repo_data.get("name"),
+                "full_name": repo_data.get("full_name"),
+                "url": repo_data.get("clone_url"),
+                "branch": repo_data.get("default_branch", "main"),
+                "owner_id": owner_profile.id,
+                "description": repo_data.get("description"),
+                "is_private": repo_data.get("private", False)
+            }
+            repository = await repository_crud.create(repo_create_data)
+        
+        # Determine PR status
+        pr_status = "open"
+        if pr_data.get("state") == "closed":
+            if pr_data.get("merged"):
+                pr_status = "merged"
+            else:
+                pr_status = "closed"
+        
+        # Create or update pull request
+        pr_create_data = {
+            "github_id": pr_data.get("id"),
+            "number": pr_data.get("number"),
+            "title": pr_data.get("title"),
+            "body": pr_data.get("body"),
+            "status": pr_status,
+            "repository_id": repository.id,
+            "author_id": author_profile.id,
+            "base_branch": pr_data.get("base", {}).get("ref"),
+            "head_branch": pr_data.get("head", {}).get("ref"),
+            "closed_at": pr_data.get("closed_at"),
+            "merged_at": pr_data.get("merged_at")
+        }
+        
+        pull_request = await pull_request_crud.create_or_update(pr_create_data)
+        
+        # Enqueue background job for processing PR diff
+        if action in ["opened", "synchronize"]:
+            job_data = {
+                "type": "process_pr_diff",
+                "pull_request_id": pull_request.id,
+                "repository_id": repository.id,
+                "pr_number": pr_data.get("number"),
+                "action": action,
+                "diff_url": pr_data.get("diff_url"),
+                "patch_url": pr_data.get("patch_url")
+            }
+            
+            await enqueue_job(job_data)
+            logger.info(f"Enqueued PR diff processing job for PR #{pr_data.get('number')}")
+        
+        logger.info(f"Processed PR event: {action} for PR #{pr_data.get('number')}")
+        
     except Exception as e:
-        logger.error(f"Error processing PR event: {e}")
+        logger.error(f"Error handling pull request event: {e}")
         raise
 
 
 async def handle_push_event(payload: dict):
-    """
-    Handle push events (optional)
-    """
+    """Handle push webhook events"""
     try:
-        repo_full_name = payload["repository"]["full_name"]
-        ref = payload["ref"]
+        repo_data = payload.get("repository", {})
+        ref = payload.get("ref", "")
+        commits = payload.get("commits", [])
         
-        logger.info(f"Received push event for {repo_full_name} on {ref}")
+        # Only process pushes to main/master branches for now
+        if not ref.endswith(("/main", "/master")):
+            logger.info(f"Ignoring push to branch: {ref}")
+            return
         
-        # Add logic to handle push events if needed
-        # For example, re-index the repository if it's the main branch
+        # Get repository from database
+        repository = await repository_crud.get_by_github_id(repo_data.get("id"))
+        if not repository:
+            logger.warning(f"Repository not found for push event: {repo_data.get('full_name')}")
+            return
+        
+        # Enqueue background job for processing repository updates
+        job_data = {
+            "type": "process_push",
+            "repository_id": repository.id,
+            "ref": ref,
+            "commits_count": len(commits),
+            "head_commit": payload.get("head_commit", {}),
+            "compare_url": payload.get("compare")
+        }
+        
+        await enqueue_job(job_data)
+        logger.info(f"Enqueued push processing job for {repo_data.get('full_name')}")
         
     except Exception as e:
-        logger.error(f"Error processing push event: {e}")
+        logger.error(f"Error handling push event: {e}")
+        raise
 
 
 @router.get("/webhook/health")
 async def webhook_health():
-    """
-    Health check endpoint for webhook service
-    """
-    return {
-        "status": "healthy",
-        "service": "github-webhook",
-        "configured": {
-            "app_id": bool(get_github_app_id() if hasattr(get_github_app_id, '__call__') else True),
-            "webhook_secret": bool(get_github_webhook_secret())
-        }
-    }
+    """Health check endpoint for webhook"""
+    return {"status": "healthy", "service": "github-webhook"}
