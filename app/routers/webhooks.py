@@ -2,10 +2,11 @@ from fastapi import APIRouter, Request, HTTPException, Header
 from typing import Optional
 import json
 import logging
-from ..auth import verify_webhook_signature
+from ..auth import verify_github_signature
 from ..queues import enqueue_job
 from ..crud import repository_crud, pull_request_crud, github_profile_crud
 from ..models import PullRequestStatus
+from ..config import get_github_webhook_secret
 
 router = APIRouter(prefix="/github", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ async def github_webhook(
         body = await request.body()
         
         # Verify webhook signature
-        if not verify_webhook_signature(body, x_hub_signature_256):
+        if not verify_github_signature(body, x_hub_signature_256, get_github_webhook_secret()):
             raise HTTPException(status_code=401, detail="Invalid signature")
         
         # Parse JSON payload
