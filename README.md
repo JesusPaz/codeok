@@ -1,160 +1,153 @@
-# Repository Analysis API
+# GitHub Webhook API
 
-API para análisis de repositorios con ingesta, consultas y grafos usando FastAPI.
+API para aprobar automáticamente Pull Requests de GitHub cuando se menciona una cuenta específica.
 
-## Estructura del Proyecto
+## 🚀 Inicio Rápido
 
-```
-.
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # Aplicación principal FastAPI
-│   ├── models.py            # Modelos Pydantic
-│   ├── auth.py              # Autenticación GitHub App
-│   ├── config.py            # Configuración de la aplicación
-│   ├── queues.py            # Cola de trabajos en segundo plano
-│   └── routers/
-│       ├── __init__.py
-│       ├── repos.py         # Endpoints de repositorios
-│       ├── query.py         # Endpoint de consultas
-│       └── webhooks.py      # Webhook de GitHub
-├── requirements.txt         # Dependencias
-└── README.md               # Este archivo
-```
-
-## Instalación
-
-1. Instalar dependencias:
+### 1. Verificar Variables de Entorno
 ```bash
+python check_env.py
+```
+
+### 2. Probar Autenticación
+```bash
+python test_connection.py
+```
+
+### 3. Ejecutar la Aplicación
+```bash
+python run.py
+```
+
+## 📋 Configuración
+
+### Variables de Entorno Requeridas
+
+```bash
+# GitHub App Configuration
+GITHUB_CLIENT_ID=123456789012345678
+GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----"
+GITHUB_INSTALLATION_ID=12345678
+
+# Webhook Configuration
+WEBHOOK_SECRET=tu_webhook_secret
+TARGET_USERNAME=tu_usuario
+
+# Server Configuration (opcional)
+HOST=0.0.0.0
+PORT=8000
+```
+
+### Cómo Obtener las Variables
+
+1. **GITHUB_CLIENT_ID**: En tu GitHub App → General → Client ID
+2. **GITHUB_PRIVATE_KEY**: En tu GitHub App → General → Generate private key
+3. **GITHUB_INSTALLATION_ID**: En tu GitHub App → Install App → Installation ID
+4. **WEBHOOK_SECRET**: Cualquier string secreto para verificar webhooks
+5. **TARGET_USERNAME**: El usuario que debe ser mencionado para aprobar PRs
+
+### Instalación
+
+```bash
+# 1. Instalar dependencias
 pip install -r requirements.txt
+
+# 2. Configurar variables de entorno
+export GITHUB_CLIENT_ID=tu_client_id
+export GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\ntu_clave...\n-----END RSA PRIVATE KEY-----"
+export GITHUB_INSTALLATION_ID=tu_installation_id
+export WEBHOOK_SECRET=tu_webhook_secret
+export TARGET_USERNAME=tu_usuario
+
+# 3. Verificar configuración
+python check_env.py
+
+# 4. Probar autenticación
+python test_connection.py
+
+# 5. Ejecutar aplicación
+python run.py
 ```
 
-2. Configurar variables de entorno (opcional para webhooks):
+## 🔧 Uso
+
+### Endpoints Disponibles
+
+- `GET /` - Información de la API
+- `GET /health` - Health check
+- `POST /webhook` - Endpoint para webhooks de GitHub
+- `GET /docs` - Documentación interactiva
+
+### Configuración del Webhook en GitHub
+
+1. Ve a tu repositorio → Settings → Webhooks → Add webhook
+2. **Payload URL**: `https://tu-dominio.com/webhook`
+3. **Content type**: `application/json`
+4. **Secret**: El mismo valor que `WEBHOOK_SECRET`
+5. **Events**: Selecciona "Pull requests"
+
+## ⚡ Funcionamiento
+
+1. Se recibe un webhook cuando se abre/actualiza un PR
+2. Se verifica la firma del webhook para seguridad
+3. Se busca menciones del usuario objetivo en el cuerpo del PR
+4. Si se encuentra una mención, se aprueba automáticamente el PR usando GitHub App
+
+## 🧪 Testing
+
 ```bash
-export GITHUB_APP_ID="your-app-id"
-export GITHUB_PRIVATE_KEY="your-private-key"
-export GITHUB_WEBHOOK_SECRET="your-webhook-secret"
+# Ejecutar todos los tests
+python -m pytest
+
+# Ejecutar tests específicos
+python -m pytest test_app.py -v
+
+# Test con coverage
+python -m pytest --cov=app
 ```
 
-3. Ejecutar la aplicación:
-```bash
-uvicorn app.main:app --reload
+## 📁 Estructura del Proyecto
+
+```
+app/
+├── __init__.py
+├── config.py          # Configuración y variables de entorno
+├── github_auth.py     # Autenticación GitHub App con JWT
+├── github_service.py  # Servicios de GitHub API
+├── main.py           # Aplicación FastAPI principal
+├── routes.py         # Rutas y endpoints
+└── utils.py          # Utilidades (verificación, menciones)
+
+# Scripts útiles
+├── run.py            # Ejecutar aplicación
+├── check_env.py      # Verificar variables de entorno
+├── test_connection.py # Probar autenticación
+└── env_example.txt   # Ejemplo de variables de entorno
 ```
 
-La API estará disponible en `http://localhost:8000`
+## 🔐 Autenticación GitHub App
 
-## Endpoints
+La aplicación usa GitHub App con JWT para autenticación:
 
-### POST /repos
-Registrar un repositorio (URL git + branch). Devuelve repo_id y estado inicial PENDING.
+1. **Genera JWT** usando Client ID y Private Key
+2. **Obtiene Installation Access Token** usando el JWT
+3. **Hace peticiones a la API** usando el Access Token
 
-**Request:**
-```json
-{
-  "url": "https://github.com/usuario/repo.git",
-  "branch": "main"
-}
-```
+## 🛠️ Troubleshooting
 
-**Response:**
-```json
-{
-  "repo_id": "uuid-generado",
-  "status": "PENDING"
-}
-```
+### Error: "Could not parse the provided public key"
+- Verifica que `GITHUB_PRIVATE_KEY` tenga el formato correcto
+- Asegúrate de incluir `-----BEGIN RSA PRIVATE KEY-----` y `-----END RSA PRIVATE KEY-----`
+- Usa `\n` para los saltos de línea en la variable de entorno
 
-### GET /repos/{repo_id}/status
-Consultar el estado del proceso de ingesta (QUEUED / PROCESSING / READY / ERROR).
+### Error: "Installation access token"
+- Verifica que `GITHUB_INSTALLATION_ID` sea correcto
+- Asegúrate de que la GitHub App esté instalada en tu repositorio
 
-**Response:**
-```json
-{
-  "status": "READY",
-  "message": "Repository processed successfully"
-}
-```
+### Webhook no funciona
+- Verifica que `WEBHOOK_SECRET` coincida con el configurado en GitHub
+- Revisa los logs del webhook en GitHub → Settings → Webhooks
 
-### POST /query
-Preguntar algo sobre el repo. Respuesta en stream (SSE).
+## 📝 Licencia
 
-**Request:**
-```json
-{
-  "repo_id": "uuid-del-repo",
-  "question": "¿Qué hace la función main?"
-}
-```
-
-**Response:** Stream de texto con formato SSE
-
-### GET /repos/{repo_id}/graph (Opcional)
-Obtener un sub-grafo en JSON; acepta filtros depth y node_id.
-
-**Query Parameters:**
-- `depth`: Profundidad del grafo
-- `node_id`: ID de nodo específico
-
-### DELETE /repos/{repo_id}
-Borrar repo, embeddings y grafo asociados.
-
-### POST /github/webhook
-Webhook para recibir eventos de GitHub App (pull requests, push, etc.).
-
-**Headers requeridos:**
-- `X-Hub-Signature-256`: Firma HMAC del payload
-- `X-GitHub-Event`: Tipo de evento (pull_request, push, etc.)
-
-**Eventos soportados:**
-- `pull_request` (opened, synchronize): Procesa diffs de PRs
-- `push`: Maneja eventos de push (opcional)
-
-### GET /github/webhook/health
-Health check del servicio de webhooks.
-
-## Documentación Automática
-
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
-## Estados de Repositorio
-
-- `PENDING`: Recién registrado
-- `QUEUED`: En cola para procesamiento
-- `PROCESSING`: Siendo procesado
-- `READY`: Listo para consultas
-- `ERROR`: Error en el procesamiento
-
-## Funcionalidades de GitHub App
-
-### Autenticación
-- Genera JWT tokens para autenticación de GitHub App
-- Obtiene installation tokens para acceso a repositorios
-- Verifica firmas HMAC de webhooks
-
-### Procesamiento de PRs
-- Recibe eventos de pull requests via webhook
-- Encola trabajos para procesar diffs
-- Procesa cambios en segundo plano
-
-### Cola de Trabajos
-- Sistema de cola en memoria para trabajos asíncronos
-- Worker en segundo plano para procesar trabajos
-- Logging de actividades
-
-## Configuración de GitHub App
-
-1. Crear una GitHub App en GitHub
-2. Configurar webhook URL: `https://tu-dominio.com/github/webhook`
-3. Seleccionar eventos: Pull requests, Push
-4. Generar private key y obtener App ID
-5. Instalar la app en repositorios deseados
-
-## Notas de Implementación
-
-- Usa almacenamiento en memoria (para producción usar base de datos)
-- Simula procesamiento asíncrono de repositorios
-- Implementa streaming para respuestas de consultas
-- Sigue las mejores prácticas de FastAPI con APIRouter
-- Incluye verificación de firmas HMAC para webhooks
-- Sistema de cola simple para trabajos en segundo plano
+MIT License

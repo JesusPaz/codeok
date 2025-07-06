@@ -1,5 +1,10 @@
-fastapi[standard]
-cryptography
-PyJWT
+fastapi
+uvicorn
 httpx
-supabase
+pytest
+pytest-cov
+requests
+PyJWT
+cryptography
+PyGithub
+python-dotenv
