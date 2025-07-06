@@ -1,0 +1,9 @@
+# Chart Releaser configuration
+owner: JesusPaz
+git-repo: codeok
+charts-repo: https://jesuspaz.github.io/codeok
+target-branch: gh-pages
+package-path: .cr-release-packages
+index-path: .cr-index
+pages-branch: gh-pages
+pages-index-path: index.yaml 

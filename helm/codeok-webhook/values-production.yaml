@@ -1,0 +1,114 @@
+# Production values for codeok
+# Override default values for production environment
+
+replicaCount: 3
+
+image:
+  repository: your-dockerhub-username/codeok
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# Use External Secrets for production
+externalSecrets:
+  enabled: true
+  secretStore:
+    name: "aws-secretsmanager-store"
+    kind: "SecretStore"
+  awsSecrets:
+    region: "us-west-2"
+    githubAppId:
+      name: "prod/codeok/github-app-id"
+      key: "app-id"
+    githubPrivateKey:
+      name: "prod/codeok/github-private-key"
+      key: "private-key"
+    webhookSecret:
+      name: "prod/codeok/webhook-secret"
+      key: "secret"
+
+# Production ingress configuration
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    # ALB Configuration
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/load-balancer-name: codeok-prod-alb
+    alb.ingress.kubernetes.io/group.name: codeok-prod
+    
+    # SSL/TLS
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS-1-2-2017-01
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-west-2:123456789012:certificate/your-cert-id"
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    
+    # Health checks
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
+    
+    # Security
+    alb.ingress.kubernetes.io/security-groups: "sg-prod-webhook-alb"
+    alb.ingress.kubernetes.io/subnets: "subnet-prod-public-1,subnet-prod-public-2"
+    
+    # Logging
+    alb.ingress.kubernetes.io/load-balancer-attributes: access_logs.s3.enabled=true,access_logs.s3.bucket=your-alb-logs-bucket,access_logs.s3.prefix=codeok-prod
+    
+  hosts:
+    - host: webhook.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: codeok-tls
+      hosts:
+        - webhook.yourdomain.com
+
+# Production resource limits
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+# Enhanced autoscaling for production
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Production affinity rules
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchExpressions:
+        - key: app.kubernetes.io/name
+          operator: In
+          values:
+          - codeok
+      topologyKey: kubernetes.io/hostname
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      preference:
+        matchExpressions:
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values:
+          - t3.medium
+          - t3.large
+
+# Enable all security features
+networkPolicy:
+  enabled: true
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2 

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: codeok
+description: A Helm chart for GitHub webhook API that auto-approves PRs
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - github
+  - webhook
+  - api
+  - fastapi
+home: https://github.com/JesusPaz/codeok
+sources:
+  - https://github.com/JesusPaz/codeok
+maintainers:
+  - name: Jesus Paz
+    email: jeherpabo@gmail.com

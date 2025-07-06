@@ -1,153 +1,177 @@
-# GitHub Webhook API
+# CodeOK - GitHub Webhook API
 
-API para aprobar automáticamente Pull Requests de GitHub cuando se menciona una cuenta específica.
+A FastAPI application that automatically approves GitHub Pull Requests when specific users are mentioned.
 
-## 🚀 Inicio Rápido
+## Features
 
-### 1. Verificar Variables de Entorno
+- 🚀 **Automatic PR Approval**: Approves PRs when target users are mentioned
+- 🔐 **GitHub App Authentication**: Secure authentication using GitHub App with JWT
+- 🔒 **Webhook Verification**: Validates GitHub webhook signatures
+- 📦 **Docker Ready**: Containerized application with GitHub Actions CI/CD
+- ⚡ **FastAPI**: Modern, fast web framework
+- ☸️ **Kubernetes Ready**: Complete Helm chart for production deployment
+
+## Quick Start
+
+### Using Docker
+
 ```bash
-python check_env.py
+# Pull and run the latest image
+docker run -p 8000:8000 \
+  -e GITHUB_APP_ID=your_app_id \
+  -e GITHUB_PRIVATE_KEY="$(cat your-private-key.pem)" \
+  -e WEBHOOK_SECRET=your_webhook_secret \
+  -e TARGET_USERNAME=codeok \
+  jesuspaz/codeok:latest
 ```
 
-### 2. Probar Autenticación
+### Using Helm Chart
+
+Add the Helm repository:
+
 ```bash
-python test_connection.py
+helm repo add codeok https://jesuspaz.github.io/codeok
+helm repo update
 ```
 
-### 3. Ejecutar la Aplicación
+Install the chart:
+
 ```bash
-python run.py
+# Development installation
+helm install codeok codeok/codeok \
+  --set secrets.github.appId="your_app_id" \
+  --set secrets.github.privateKey="$(cat your-private-key.pem)" \
+  --set secrets.webhook.secret="your_webhook_secret" \
+  --set app.targetUsername="codeok"
+
+# Production installation with External Secrets
+helm install codeok codeok/codeok \
+  --values values-production.yaml \
+  --set externalSecrets.enabled=true \
+  --set ingress.hosts[0].host=webhook.yourdomain.com
 ```
 
-## 📋 Configuración
+## Configuration
 
-### Variables de Entorno Requeridas
+### Required Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GITHUB_APP_ID` | GitHub App ID (number) | Yes |
+| `GITHUB_PRIVATE_KEY` | GitHub App private key (PEM format) | Yes |
+| `WEBHOOK_SECRET` | GitHub webhook secret | Yes |
+| `TARGET_USERNAME` | Username to trigger PR approval | Yes |
+
+### Optional Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `HOST` | Server host | `0.0.0.0` |
+| `PORT` | Server port | `8000` |
+| `GITHUB_INSTALLATION_ID` | GitHub App installation ID | Auto-detected |
+
+## GitHub App Setup
+
+1. **Create a GitHub App**:
+   - Go to GitHub Settings → Developer settings → GitHub Apps
+   - Click "New GitHub App"
+   - Fill in the required information
+   - Set webhook URL to your deployment URL + `/webhook`
+
+2. **Configure Permissions**:
+   - Repository permissions:
+     - Pull requests: Read & Write
+     - Metadata: Read
+   - Subscribe to events:
+     - Pull requests
+
+3. **Generate Private Key**:
+   - In your GitHub App settings, generate a private key
+   - Download the `.pem` file
+
+4. **Install the App**:
+   - Install the GitHub App on your target repositories
+
+## Deployment Options
+
+### 1. Local Development
 
 ```bash
-# GitHub App Configuration
-GITHUB_CLIENT_ID=123456789012345678
-GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----"
-GITHUB_INSTALLATION_ID=12345678
+# Clone the repository
+git clone https://github.com/JesusPaz/codeok.git
+cd codeok
 
-# Webhook Configuration
-WEBHOOK_SECRET=tu_webhook_secret
-TARGET_USERNAME=tu_usuario
-
-# Server Configuration (opcional)
-HOST=0.0.0.0
-PORT=8000
-```
-
-### Cómo Obtener las Variables
-
-1. **GITHUB_CLIENT_ID**: En tu GitHub App → General → Client ID
-2. **GITHUB_PRIVATE_KEY**: En tu GitHub App → General → Generate private key
-3. **GITHUB_INSTALLATION_ID**: En tu GitHub App → Install App → Installation ID
-4. **WEBHOOK_SECRET**: Cualquier string secreto para verificar webhooks
-5. **TARGET_USERNAME**: El usuario que debe ser mencionado para aprobar PRs
-
-### Instalación
-
-```bash
-# 1. Instalar dependencias
+# Install dependencies
 pip install -r requirements.txt
 
-# 2. Configurar variables de entorno
-export GITHUB_CLIENT_ID=tu_client_id
-export GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\ntu_clave...\n-----END RSA PRIVATE KEY-----"
-export GITHUB_INSTALLATION_ID=tu_installation_id
-export WEBHOOK_SECRET=tu_webhook_secret
-export TARGET_USERNAME=tu_usuario
+# Set environment variables
+export GITHUB_APP_ID=your_app_id
+export GITHUB_PRIVATE_KEY="$(cat your-private-key.pem)"
+export WEBHOOK_SECRET=your_webhook_secret
+export TARGET_USERNAME=codeok
 
-# 3. Verificar configuración
-python check_env.py
-
-# 4. Probar autenticación
-python test_connection.py
-
-# 5. Ejecutar aplicación
-python run.py
+# Run the application
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-## 🔧 Uso
+### 2. Docker Compose
 
-### Endpoints Disponibles
-
-- `GET /` - Información de la API
-- `GET /health` - Health check
-- `POST /webhook` - Endpoint para webhooks de GitHub
-- `GET /docs` - Documentación interactiva
-
-### Configuración del Webhook en GitHub
-
-1. Ve a tu repositorio → Settings → Webhooks → Add webhook
-2. **Payload URL**: `https://tu-dominio.com/webhook`
-3. **Content type**: `application/json`
-4. **Secret**: El mismo valor que `WEBHOOK_SECRET`
-5. **Events**: Selecciona "Pull requests"
-
-## ⚡ Funcionamiento
-
-1. Se recibe un webhook cuando se abre/actualiza un PR
-2. Se verifica la firma del webhook para seguridad
-3. Se busca menciones del usuario objetivo en el cuerpo del PR
-4. Si se encuentra una mención, se aprueba automáticamente el PR usando GitHub App
-
-## 🧪 Testing
-
-```bash
-# Ejecutar todos los tests
-python -m pytest
-
-# Ejecutar tests específicos
-python -m pytest test_app.py -v
-
-# Test con coverage
-python -m pytest --cov=app
+```yaml
+version: '3.8'
+services:
+  codeok:
+    image: jesuspaz/codeok:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - GITHUB_APP_ID=your_app_id
+      - GITHUB_PRIVATE_KEY_PATH=/secrets/private-key.pem
+      - WEBHOOK_SECRET=your_webhook_secret
+      - TARGET_USERNAME=codeok
+    volumes:
+      - ./your-private-key.pem:/secrets/private-key.pem:ro
 ```
 
-## 📁 Estructura del Proyecto
+### 3. Kubernetes with Helm
 
-```
-app/
-├── __init__.py
-├── config.py          # Configuración y variables de entorno
-├── github_auth.py     # Autenticación GitHub App con JWT
-├── github_service.py  # Servicios de GitHub API
-├── main.py           # Aplicación FastAPI principal
-├── routes.py         # Rutas y endpoints
-└── utils.py          # Utilidades (verificación, menciones)
+See the [Helm Chart Documentation](helm/codeok-webhook/README.md) for detailed Kubernetes deployment instructions.
 
-# Scripts útiles
-├── run.py            # Ejecutar aplicación
-├── check_env.py      # Verificar variables de entorno
-├── test_connection.py # Probar autenticación
-└── env_example.txt   # Ejemplo de variables de entorno
-```
+## API Endpoints
 
-## 🔐 Autenticación GitHub App
+- `GET /` - Health check
+- `GET /health` - Health check endpoint
+- `POST /webhook` - GitHub webhook endpoint
 
-La aplicación usa GitHub App con JWT para autenticación:
+## Security Features
 
-1. **Genera JWT** usando Client ID y Private Key
-2. **Obtiene Installation Access Token** usando el JWT
-3. **Hace peticiones a la API** usando el Access Token
+- 🔐 **GitHub App Authentication**: Uses JWT tokens for secure GitHub API access
+- 🔒 **Webhook Signature Verification**: Validates all incoming webhooks
+- 🛡️ **Non-root Container**: Runs as non-privileged user
+- 🔒 **Read-only Filesystem**: Container filesystem is read-only
+- 🚫 **No Privilege Escalation**: Security context prevents privilege escalation
 
-## 🛠️ Troubleshooting
+## Monitoring
 
-### Error: "Could not parse the provided public key"
-- Verifica que `GITHUB_PRIVATE_KEY` tenga el formato correcto
-- Asegúrate de incluir `-----BEGIN RSA PRIVATE KEY-----` y `-----END RSA PRIVATE KEY-----`
-- Usa `\n` para los saltos de línea en la variable de entorno
+The application provides health check endpoints and can be monitored using:
 
-### Error: "Installation access token"
-- Verifica que `GITHUB_INSTALLATION_ID` sea correcto
-- Asegúrate de que la GitHub App esté instalada en tu repositorio
+- **Health Checks**: `/health` endpoint
+- **Logs**: Structured logging with request/response details
+- **Metrics**: Can be integrated with Prometheus (when enabled)
 
-### Webhook no funciona
-- Verifica que `WEBHOOK_SECRET` coincida con el configurado en GitHub
-- Revisa los logs del webhook en GitHub → Settings → Webhooks
+## Contributing
 
-## 📝 Licencia
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
-MIT License
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+- 📖 [Documentation](https://github.com/JesusPaz/codeok)
+- 🐛 [Issues](https://github.com/JesusPaz/codeok/issues)
+- 💬 [Discussions](https://github.com/JesusPaz/codeok/discussions)
