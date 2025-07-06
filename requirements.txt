@@ -1,10 +1,6 @@
-fastapi
-uvicorn
+fastapi[standard]
+pydantic
 httpx
-pytest
-pytest-cov
-requests
 PyJWT
 cryptography
-PyGithub
 python-dotenv
