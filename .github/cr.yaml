@@ -6,4 +6,4 @@ target-branch: gh-pages
 package-path: .cr-release-packages
 index-path: .cr-index
 pages-branch: gh-pages
-pages-index-path: index.yaml 
+pages-index-path: index.yaml
