@@ -13,6 +13,14 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+# Global configuration for external secrets
+global:
+  client: "default"
+  environment: "dev"
+
+# Service name for external secrets path
+serviceName: "codeok"
+
 # Application configuration
 app:
   port: 8000
@@ -37,22 +45,17 @@ secrets:
 # External secrets configuration (recommended for production)
 externalSecrets:
   enabled: false
-  # If using External Secrets Operator
-  secretStore:
-    name: "aws-secretsmanager"
-    kind: "SecretStore"
-  # AWS Secrets Manager configuration
-  awsSecrets:
-    region: "us-west-2"
-    githubAppId:
-      name: "codeok/github-app-id"
-      key: "app-id"
-    githubPrivateKey:
-      name: "codeok/github-private-key"
-      key: "private-key"
-    webhookSecret:
-      name: "codeok/webhook-secret"
-      key: "secret"
+  # Secret store type: "aws-secretsmanager" or "aws-parameterstore"
+  secretStore: "aws-secretsmanager"
+  # Refresh interval for secrets
+  refreshId: "1"
+  # Secret path for AWS Secrets Manager (when using secretsmanager)
+  secretPath: ""  # Will default to: {global.client}/{global.environment}/{serviceName}/config
+  # Secret keys for AWS Parameter Store (when using parameterstore)
+  secretKeys:
+    - "github-app-id"
+    - "github-private-key" 
+    - "webhook-secret"
 
 serviceAccount:
   # Specifies whether a service account should be created
