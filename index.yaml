@@ -3,6 +3,27 @@ entries:
   codeok:
   - apiVersion: v2
     appVersion: 1.0.0
+    created: "2025-07-07T03:39:47.215887846Z"
+    description: A Helm chart for GitHub webhook API that auto-approves PRs
+    digest: 72b6d8a9a5236d01392e7a883604b63771f199fdcb1d5781f8eebc8af35a689c
+    home: https://github.com/JesusPaz/codeok
+    keywords:
+    - github
+    - webhook
+    - api
+    - fastapi
+    maintainers:
+    - email: jeherpabo@gmail.com
+      name: Jesus Paz
+    name: codeok
+    sources:
+    - https://github.com/JesusPaz/codeok
+    type: application
+    urls:
+    - https://github.com/JesusPaz/codeok/releases/download/codeok-0.1.2/codeok-0.1.2.tgz
+    version: 0.1.2
+  - apiVersion: v2
+    appVersion: 1.0.0
     created: "2025-07-07T02:01:30.926468633Z"
     description: A Helm chart for GitHub webhook API that auto-approves PRs
     digest: e3c2a10f4fa3b0338bcf267439855ad7aea158f497798c34e3ddb895914a7a43
@@ -43,4 +64,4 @@ entries:
     urls:
     - https://github.com/JesusPaz/codeok/releases/download/codeok-0.1.0/codeok-0.1.0.tgz
     version: 0.1.0
-generated: "2025-07-07T02:01:30.926477569Z"
+generated: "2025-07-07T03:39:47.215899708Z"
