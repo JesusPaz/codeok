@@ -3,42 +3,42 @@ import jwt
 import time
 from typing import Optional
 
-# Variables de entorno para GitHub App (solo lo esencial)
-GITHUB_APP_ID = os.getenv("GITHUB_APP_ID")  # App ID de la GitHub App (número)
-GITHUB_PRIVATE_KEY = os.getenv("GITHUB_PRIVATE_KEY")  # Contenido del archivo PEM o path al archivo
-GITHUB_PRIVATE_KEY_PATH = os.getenv("GITHUB_PRIVATE_KEY_PATH")  # Path al archivo PEM
+# Environment variables for GitHub App (essentials only)
+GITHUB_APP_ID = os.getenv("GITHUB_APP_ID")  # GitHub App ID (number)
+GITHUB_PRIVATE_KEY = os.getenv("GITHUB_PRIVATE_KEY")  # PEM file content or path to file
+GITHUB_PRIVATE_KEY_PATH = os.getenv("GITHUB_PRIVATE_KEY_PATH")  # Path to PEM file
 
-# Webhook Configuration (opcional)
+# Webhook Configuration (optional)
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "test_secret")
 TARGET_USERNAME = os.getenv("TARGET_USERNAME", "codeok")
 
-# Configuración del servidor
+# Server configuration
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
 def get_github_app_id() -> str:
-    """Obtiene el App ID de la GitHub App"""
+    """Gets the GitHub App ID"""
     if not GITHUB_APP_ID:
-        return "123456"  # Para desarrollo
+        return "123456"  # For development
     return GITHUB_APP_ID
 
 def get_github_private_key() -> str:
-    """Obtiene la private key (desde archivo o variable de entorno)"""
-    # Prioridad: 1. Path al archivo, 2. Contenido directo
+    """Gets the private key (from file or environment variable)"""
+    # Priority: 1. Path to file, 2. Direct content
     if GITHUB_PRIVATE_KEY_PATH:
         try:
             with open(GITHUB_PRIVATE_KEY_PATH, 'r') as f:
                 return f.read()
         except FileNotFoundError:
-            raise Exception(f"Archivo de clave privada no encontrado: {GITHUB_PRIVATE_KEY_PATH}")
+            raise Exception(f"Private key file not found: {GITHUB_PRIVATE_KEY_PATH}")
         except Exception as e:
-            raise Exception(f"Error leyendo archivo de clave privada: {e}")
+            raise Exception(f"Error reading private key file: {e}")
     
     elif GITHUB_PRIVATE_KEY:
         return GITHUB_PRIVATE_KEY
     
     else:
-        # Private key de prueba (no válida para producción)
+        # Test private key (not valid for production)
         return """-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAvxJdaHqr0Sxbzip7T4Du9Hx1aRPOP9itY9HxLSqFbXn4MX0I
 UMMSJ1WzJ4ms4S5PltOHMJnOLuFtlzRkq0Rj4L4QngL9CN0gIPe2relfK88qhgyq
@@ -49,15 +49,15 @@ Ha4W6GqJvUFBuEvJivek/bjL/6De3fC+WK+m+PNq6qNqjKHPB7NYnsgYbDdSH2Gq
 -----END RSA PRIVATE KEY-----"""
 
 def get_github_installation_id() -> str:
-    """Obtiene el Installation ID (no requerido para JWT)"""
-    return "987654"  # No necesario para generar JWT
+    """Gets the Installation ID (not required for JWT)"""
+    return "987654"  # Not necessary for JWT generation
 
 def get_webhook_secret() -> str:
-    """Obtiene el secreto del webhook"""
+    """Gets the webhook secret"""
     return WEBHOOK_SECRET
 
 def get_target_username() -> str:
-    """Obtiene el usuario objetivo"""
+    """Gets the target username"""
     return TARGET_USERNAME
 
 def get_server_config() -> tuple[str, int]:

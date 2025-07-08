@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/")
 async def root():
-    """Endpoint raíz"""
+    """Root endpoint"""
     return {
         "message": "GitHub Webhook API",
         "version": "1.0.0",
@@ -32,14 +32,14 @@ async def github_webhook(
     request: Request,
     x_hub_signature_256: Optional[str] = Header(None, alias="X-Hub-Signature-256")
 ):
-    """Recibe webhooks de GitHub"""
+    """Receives GitHub webhooks"""
     try:
-        # Obtener body
+        # Get request body
         body = await request.body()
         
-        # DEBUG: Imprimir información del webhook
+        # DEBUG: Print webhook information
         print("\n" + "="*60)
-        print("🔍 DEBUG: WEBHOOK RECIBIDO")
+        print("🔍 DEBUG: WEBHOOK RECEIVED")
         print("="*60)
         
         # Headers
@@ -48,102 +48,105 @@ async def github_webhook(
             if key.lower().startswith('x-'):
                 print(f"  {key}: {value}")
         
-        # Verificar firma si está presente
+        # Verify signature if present
         if x_hub_signature_256:
-            print(f"🔐 Firma recibida: {x_hub_signature_256[:20]}...")
+            print(f"🔐 Signature received: {x_hub_signature_256[:20]}...")
             if not verify_signature(body, x_hub_signature_256, get_webhook_secret()):
-                print("❌ Firma inválida")
-                raise HTTPException(status_code=401, detail="Firma inválida")
+                print("❌ Invalid signature")
+                raise HTTPException(status_code=401, detail="Invalid signature")
             else:
-                print("✅ Firma válida")
+                print("✅ Valid signature")
         else:
-            print("⚠️  No se recibió firma")
+            print("⚠️  No signature received")
         
-        # Parsear JSON
+        # Parse JSON
         payload = json.loads(body.decode('utf-8'))
         event_type = request.headers.get("X-GitHub-Event")
         
-        print(f"🎯 Evento: {event_type}")
+        print(f"🎯 Event: {event_type}")
         print(f"📦 Payload keys: {list(payload.keys())}")
         
-        # DEBUG: Imprimir payload completo (limitado)
-        print("📄 PAYLOAD COMPLETO:")
+        # DEBUG: Print complete payload (limited)
+        print("📄 COMPLETE PAYLOAD:")
         print(json.dumps(payload, indent=2, ensure_ascii=False)[:1000] + "..." if len(json.dumps(payload)) > 1000 else json.dumps(payload, indent=2, ensure_ascii=False))
         
-        logger.info(f"Recibido evento: {event_type}")
+        logger.info(f"Received event: {event_type}")
         
-        # Solo procesar pull_request
+        # Only process pull_request events
         if event_type == "pull_request":
             action = payload.get("action")
             pr_data = payload.get("pull_request", {})
             repo_data = payload.get("repository", {})
             
-            print(f"🔄 Acción: {action}")
+            print(f"🔄 Action: {action}")
             
-            # Procesar PRs abiertos o actualizados
-            if action in ["opened", "synchronize"]:
-                pr_number = pr_data.get("number")
-                pr_body = pr_data.get("body", "") or ""  # Manejar None
-                pr_title = pr_data.get("title", "") or ""
-                repo_full_name = repo_data.get("full_name", "")
+            # Get PR data
+            pr_number = pr_data.get("number")
+            pr_body = pr_data.get("body", "") or ""  # Handle None
+            pr_title = pr_data.get("title", "") or ""
+            pr_state = pr_data.get("state", "")
+            repo_full_name = repo_data.get("full_name", "")
+            
+            print(f"📝 PR #{pr_number}")
+            print(f"🏠 Repository: {repo_full_name}")
+            print(f"📖 Title: {pr_title}")
+            print(f"📖 PR Body: {pr_body}")
+            print(f"📊 State: {pr_state}")
+            
+            # Only process if PR is NOT closed
+            if pr_state == "closed":
+                print(f"⏭️  PR #{pr_number} is closed, not processing")
+                logger.info(f"PR #{pr_number} is closed, not processing")
+            else:
+                logger.info(f"Processing PR #{pr_number} in {repo_full_name}")
                 
-                print(f"📝 PR #{pr_number}")
-                print(f"🏠 Repositorio: {repo_full_name}")
-                print(f"📖 Título: {pr_title}")
-                print(f"📖 Body del PR: {pr_body}")
-                
-                logger.info(f"Procesando PR #{pr_number} en {repo_full_name}")
-                
-                # Verificar mención en título O body
+                # Check for mention in title OR body
                 target_username = get_target_username()
-                print(f"🎯 Buscando menciones de: {target_username}")
+                print(f"🎯 Looking for mentions of: {target_username}")
                 
-                # Buscar en título y body
+                # Search in title and body
                 text_to_check = f"{pr_title} {pr_body}".lower()
                 mention_found = False
                 
-                # Diferentes formas de mencionar
+                # Different ways to mention
                 mention_patterns = [
                     f"@{target_username}",
                     f"@{target_username.lower()}",
                     target_username.lower(),
-                    "bot",  # Mención genérica al bot
+                    "bot",  # Generic bot mention
                     "@bot"
                 ]
                 
                 for pattern in mention_patterns:
                     if pattern.lower() in text_to_check:
                         mention_found = True
-                        print(f"✅ Encontrada mención: '{pattern}'")
+                        print(f"✅ Found mention: '{pattern}'")
                         break
                 
                 if mention_found:
-                    print(f"🚀 APROBANDO PR #{pr_number} automáticamente")
-                    logger.info(f"Mención encontrada en PR #{pr_number}, aprobando automáticamente")
+                    print(f"🚀 APPROVING PR #{pr_number} automatically (action: {action})")
+                    logger.info(f"Mention found in PR #{pr_number}, approving automatically (action: {action})")
                     
                     if "/" in repo_full_name:
                         owner, repo = repo_full_name.split("/", 1)
                         success = await approve_pr(owner, repo, pr_number)
                         if success:
-                            print(f"✅ PR #{pr_number} APROBADO exitosamente")
+                            print(f"✅ PR #{pr_number} APPROVED successfully")
                         else:
-                            print(f"❌ Error aprobando PR #{pr_number}")
+                            print(f"❌ Error approving PR #{pr_number}")
                 else:
-                    print(f"❌ No se encontró mención relevante")
-                    logger.info(f"No se encontró mención en PR #{pr_number}")
-                    
-            else:
-                print(f"⏭️  Acción '{action}' no procesada (solo procesamos: opened, synchronize)")
+                    print(f"❌ No relevant mention found (action: {action})")
+                    logger.info(f"No mention found in PR #{pr_number} (action: {action})")
         else:
-            print(f"⏭️  Evento '{event_type}' no procesado (solo procesamos: pull_request)")
+            print(f"⏭️  Event '{event_type}' not processed (only processing: pull_request)")
         
         print("="*60)
-        print("✅ WEBHOOK PROCESADO")
+        print("✅ WEBHOOK PROCESSED")
         print("="*60 + "\n")
         
         return {"status": "success", "event": event_type}
         
     except Exception as e:
         print(f"❌ ERROR: {e}")
-        logger.error(f"Error procesando webhook: {e}")
-        raise HTTPException(status_code=500, detail="Error interno") 
+        logger.error(f"Error processing webhook: {e}")
+        raise HTTPException(status_code=500, detail="Internal error") 

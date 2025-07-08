@@ -6,16 +6,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routes import router
 from .config import HOST, PORT
 
-# Cargar variables de entorno desde .env
+# Load environment variables from .env
 load_dotenv()
 
-# Configurar logging
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Crear app FastAPI
+# Create FastAPI app
 app = FastAPI(
     title="GitHub Webhook API",
-    description="API para aprobar automáticamente PRs de GitHub cuando se menciona una cuenta específica",
+    description="API to automatically approve GitHub PRs when a specific account is mentioned",
     version="1.0.0"
 )
 
@@ -28,5 +28,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Incluir rutas
+# Include routes
 app.include_router(router)

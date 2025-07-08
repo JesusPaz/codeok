@@ -5,7 +5,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def verify_signature(payload: bytes, signature: str, secret: str) -> bool:
-    """Verifica la firma del webhook de GitHub"""
+    """Verifies GitHub webhook signature"""
     if not signature.startswith('sha256='):
         return False
     
@@ -18,7 +18,7 @@ def verify_signature(payload: bytes, signature: str, secret: str) -> bool:
     return hmac.compare_digest(expected, signature)
 
 def check_mention(body: str, username: str) -> bool:
-    """Verifica si el usuario está mencionado en el body"""
+    """Checks if the user is mentioned in the body"""
     if not body:
         return False
     
